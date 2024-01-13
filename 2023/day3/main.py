@@ -1,13 +1,15 @@
 import argparse
 from dataclasses import dataclass
+import math
 from typing import List, Union
 
 
 parser = argparse.ArgumentParser(prog="aoc day 3")
 parser.add_argument("-f", "--filename", type=str, required=True)
-args = parser.parse_args()
+parser.add_argument("-g", "--gear_ratio", action="store_true")
 
 symbols = ["*", "#", "+", "-", "$", "/", "\\", "=", "%", "&", "@", "!", "^", "(", ")"]
+gears = ["*"]
 digit = "0123456789"
 
 
@@ -73,17 +75,18 @@ def _get_surrounding_values(value: Value, lines) -> List[Value]:
     return values
 
 
-def _check_adjacent_symbol(digit_values: List[Value], lines) -> bool:
-    """Helper to determine if symbol is adjacent in any way"""
+# TODO: the solution didn't require this, but this fails for gear ratio if a part no has multiple gears adjacent
+def _get_adjacent_symbol(digit_values: List[Value], lines, adjacent_list: List[str]) -> Union[Value, None]:
+    """Helper to determine if symbol is adjacent in any way, returns None if no neighbor exists."""
     # for each digit, look around
     for digit in digit_values:
         neighbors = _get_surrounding_values(digit, lines)
 
         for n in neighbors:
-            if n.val in symbols:
-                return True
+            if n.val in adjacent_list:
+                return n
 
-    return False
+    return None
 
 
 def get_number(start_x, start_y: int, lines) -> List[Value]:
@@ -115,11 +118,17 @@ def get_number(start_x, start_y: int, lines) -> List[Value]:
     return valid_numbers
 
 
-def parse_schematic(lines):
+def _format(x: int, y: int) -> str:
+    """Helper to build x/y key."""
+    return "{x}_{y}".format(x=x, y=y)
+
+
+def parse_schematic(lines, gear_ratio: bool=False) -> int:
     """Schematic parser, where lines is a 2d array"""
     # find all the numbers, and their location
     x_pos, y_pos = 0, 0
     part_numbers = []
+    gear_map = {}  # used to store gear positions
 
     for y_idx, _ in enumerate(lines):
 
@@ -129,8 +138,7 @@ def parse_schematic(lines):
             if x_idx < x_pos or y_idx < y_pos:
                 # print("skipping x: ", x_idx, x_pos)
                 continue
-            # print(lines[y_idx][x_idx])
-            
+
             numbers = get_number(x_idx, y_idx, lines)
 
             # if not part a current number, move on
@@ -140,10 +148,18 @@ def parse_schematic(lines):
                 continue
 
             # if there is a number starting at this position, log
-            print([v.val for v in numbers])
-            is_symbol_adjacent = _check_adjacent_symbol(numbers, lines)
+            # print([v.val for v in numbers])
+            is_symbol_adjacent = _get_adjacent_symbol(numbers, lines, symbols)
             if is_symbol_adjacent:
                 part_numbers.append(int("".join([v.val for v in numbers])))
+
+            # check if gear adjacent to part no, store part_no in gear_map
+            adjacent_gear = _get_adjacent_symbol(numbers, lines, gears)
+            if adjacent_gear:
+                gear_key = _format(adjacent_gear.x, adjacent_gear.y)
+                existing_arr = gear_map.get(gear_key, [])
+                existing_arr.append(int("".join([v.val for v in numbers])))
+                gear_map[gear_key] = existing_arr
 
             # skip the next iteration to end of number, no need to look at any digits
             last_val = numbers[-1]
@@ -152,21 +168,28 @@ def parse_schematic(lines):
 
             # if at end, we done
             if not next_val:
-                return
+                break
 
             # set skip counters based on end of digit, see above
             x_pos, y_pos = next_val.x, next_val.y
         
     
-    print(part_numbers)
-    print(sum(part_numbers))
+    if gear_ratio:
+        print(gear_map)
+        return sum([math.prod(gear_map[key]) for key in gear_map if len(gear_map[key]) == 2])
+
+    return sum(part_numbers)
 
 
 def main():
+    args = parser.parse_args()
     lines = [line.rstrip() for line in open(args.filename, "r")]
-    parse_schematic(lines)
+    result = parse_schematic(lines, gear_ratio=args.gear_ratio)
 
-
+    if args.gear_ratio:
+        print("Gear ratio: ", result)
+    else:
+        print("Part number: ", result)
 
 
 if __name__ == "__main__":
